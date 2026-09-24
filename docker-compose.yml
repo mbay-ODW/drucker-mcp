@@ -1,0 +1,46 @@
+# Portainer stack "drucker-mcp" (TrueNAS, env 1). Stateless — no volumes.
+# Secrets come from the Portainer stack env; each one MUST be referenced here
+# via ${VAR}, stack env alone injects nothing into the container.
+services:
+  drucker-mcp:
+    # Built locally on the TrueNAS host (GHCR package is private):
+    #   sudo docker build -t drucker-mcp:latest .
+    # Deploy with pullImage=false. Once the GHCR package is public, switch to
+    #   ghcr.io/mbay-odw/drucker-mcp-server:latest
+    image: drucker-mcp:latest
+    container_name: drucker-mcp
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=INFO
+      - MCP_TRANSPORT=sse
+      - PORT=8000
+      # Dell C2665dnf, IPP Everywhere, takes PDF natively.
+      - PRINTER_URI=${PRINTER_URI:-ipp://10.0.1.15:631/ipp/print}
+      - MAX_PAGES_PER_JOB=${MAX_PAGES_PER_JOB:-50}
+      # Paperless: internal container names on the shared traefik network.
+      - PAPERLESS_PRIVAT_URL=http://paperless-webserver-1:8000
+      - PAPERLESS_PRIVAT_TOKEN=${PAPERLESS_PRIVAT_TOKEN}
+      - PAPERLESS_GEB_URL=http://paperless-geb-webserver-1:8000
+      - PAPERLESS_GEB_TOKEN=${PAPERLESS_GEB_TOKEN}
+      - NEXTCLOUD_PRIVAT_URL=https://nextcloud.${DOMAIN}
+      - NEXTCLOUD_PRIVAT_USER=${NEXTCLOUD_PRIVAT_USER}
+      - NEXTCLOUD_PRIVAT_PASSWORD=${NEXTCLOUD_PRIVAT_PASSWORD}
+      - NEXTCLOUD_GEB_URL=https://nextcloud-geb.${DOMAIN}
+      - NEXTCLOUD_GEB_USER=${NEXTCLOUD_GEB_USER}
+      - NEXTCLOUD_GEB_PASSWORD=${NEXTCLOUD_GEB_PASSWORD}
+      # Auth: static bearer + Authelia OIDC introspection (fail-closed if unset).
+      - MCP_API_KEY=${MCP_API_KEY}
+      - OIDC_CLIENT_ID=drucker-mcp
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+      - OAUTH_ISSUER=https://authelia.${DOMAIN}
+      - OIDC_INTROSPECTION_URL=https://authelia.${DOMAIN}/api/oidc/introspection
+      - MCP_SERVER_URL=https://drucker-mcp.${DOMAIN}
+    expose:
+      - "8000"
+    # Routing via Traefik FILE provider (traefik/drucker-mcp.yml), not labels.
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true

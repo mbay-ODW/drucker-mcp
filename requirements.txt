@@ -1,0 +1,10 @@
+# mcp 2.x removes Server.list_tools → crash loop on rebuild; stay on 1.x.
+mcp[cli]>=1.28.0,<2
+httpx>=0.28.1
+uvicorn>=0.34.0
+starlette>=0.46.0
+pypdf>=5.0
+img2pdf>=0.5.1
+pillow>=11.0
+pillow-heif>=0.21
+reportlab>=4.2

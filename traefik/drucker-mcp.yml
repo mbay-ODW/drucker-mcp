@@ -1,0 +1,90 @@
+# Traefik dynamic (file-provider) rule for drucker-mcp.
+# IMPORTANT: In this homelab Traefik routes via FILE-PROVIDER rules, NOT docker
+# labels — the docker provider does not pick up newly created containers, so the
+# compose `traefik.*` labels are inert here. Drop this file into Traefik's rules
+# dir (e.g. /mnt/apps/traefik/data/traefik2/rules/drucker-mcp.yml); the file
+# provider hot-reloads it, no Traefik restart needed.
+#
+# - The catch-all Host router sends /mcp, /sse, /messages to the drucker-mcp
+#   container (service `drucker-mcp` -> http://drucker-mcp:8000).
+# - The path-specific routers proxy Authelia's OIDC + discovery endpoints under
+#   this host (service `authelia-oidc`, shared, defined in hero-mcp.yml), each
+#   carrying the `set-authelia-host` middleware (else Authelia 500s on discovery).
+# Mirrors whatsapp-mcp.yml / hero-mcp.yml. Replace bay-ram.de with your domain.
+
+http:
+  middlewares:
+    rewrite-authorize-drucker:
+      replacePath:
+        path: "/api/oidc/authorization"
+
+  routers:
+    drucker-mcp:
+      rule: "Host(`drucker-mcp.bay-ram.de`)"
+      entrypoints: [websecure]
+      service: drucker-mcp
+      middlewares: [middlewares-rate-limit, middlewares-secure-headers]
+      tls:
+        certResolver: mydnschallenge
+
+    drucker-mcp-authorize:
+      rule: "Host(`drucker-mcp.bay-ram.de`) && PathPrefix(`/authorize`)"
+      entrypoints: [websecure]
+      service: authelia-oidc
+      middlewares: [rewrite-authorize-drucker, set-authelia-host]
+      tls:
+        certResolver: mydnschallenge
+
+    drucker-mcp-root:
+      rule: "Host(`drucker-mcp.bay-ram.de`) && Path(`/`)"
+      entrypoints: [websecure]
+      service: authelia-oidc
+      middlewares: [set-authelia-host]
+      tls:
+        certResolver: mydnschallenge
+
+    drucker-mcp-oidc:
+      rule: "Host(`drucker-mcp.bay-ram.de`) && PathPrefix(`/api/oidc`)"
+      entrypoints: [websecure]
+      service: authelia-oidc
+      middlewares: [set-authelia-host]
+      tls:
+        certResolver: mydnschallenge
+
+    drucker-mcp-api:
+      rule: "Host(`drucker-mcp.bay-ram.de`) && PathPrefix(`/api`)"
+      entrypoints: [websecure]
+      service: authelia-oidc
+      middlewares: [set-authelia-host]
+      tls:
+        certResolver: mydnschallenge
+
+    drucker-mcp-consent:
+      rule: "Host(`drucker-mcp.bay-ram.de`) && PathPrefix(`/consent`)"
+      entrypoints: [websecure]
+      service: authelia-oidc
+      middlewares: [set-authelia-host]
+      tls:
+        certResolver: mydnschallenge
+
+    drucker-mcp-static:
+      rule: "Host(`drucker-mcp.bay-ram.de`) && PathPrefix(`/static`)"
+      entrypoints: [websecure]
+      service: authelia-oidc
+      middlewares: [set-authelia-host]
+      tls:
+        certResolver: mydnschallenge
+
+    drucker-mcp-wellknown:
+      rule: "Host(`drucker-mcp.bay-ram.de`) && PathPrefix(`/.well-known`)"
+      entrypoints: [websecure]
+      service: authelia-oidc
+      middlewares: [set-authelia-host]
+      tls:
+        certResolver: mydnschallenge
+
+  services:
+    drucker-mcp:
+      loadBalancer:
+        servers:
+          - url: "http://drucker-mcp:8000"

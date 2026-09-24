@@ -1,0 +1,25 @@
+# Add this block to your Authelia identity_providers.oidc.clients list.
+# Generate the secret hash with (this deployment uses bcrypt, matching the
+# other MCP clients in the same configuration.yml):
+#   authelia crypto hash generate bcrypt --password '<plaintext>'
+# Put the PLAINTEXT into the stack env OIDC_CLIENT_SECRET, the HASH here.
+# After editing configuration.yml: `docker restart authelia`
+# (config must stay 644 root:root; Authelia runs as PUID=0).
+#
+# NOTE: no Traefik file-provider / per-host OIDC routing is needed — the
+# drucker-mcp app serves /.well-known itself and OIDC_INTROSPECTION_URL points
+# straight at https://authelia.<DOMAIN>/api/oidc/introspection.
+
+- client_id: drucker-mcp
+  client_name: Claude Drucker MCP
+  authorization_policy: one_factor
+  client_secret: '$2b$12$BCRYPT_HASH_HIER_EINTRAGEN'
+  redirect_uris:
+    - https://claude.ai/api/mcp/auth_callback
+  scopes: [openid, profile, email, offline_access, address, phone, groups]
+  grant_types: [authorization_code, refresh_token]
+  response_types: [code]
+  token_endpoint_auth_method: client_secret_post
+  introspection_endpoint_auth_method: client_secret_basic   # our server introspects with basic
+  consent_mode: pre-configured                              # skip consent on reconnect
+  pre_configured_consent_duration: 1y
