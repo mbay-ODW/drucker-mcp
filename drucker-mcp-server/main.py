@@ -14,7 +14,8 @@ import logging
 import os
 from typing import Any, Callable, Dict, List, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 
 import convert
 import ipp
@@ -38,7 +39,19 @@ DUPLEX = {
 COLOR = {"auto", "color", "monochrome"}
 
 log = logging.getLogger("drucker-mcp")
-mcp = FastMCP("drucker")
+class KlartextServer(MCPServer):
+    """mcp 2.x verbirgt den Text unerwarteter Exceptions vor dem Client ("Error executing tool X").
+    Die Tools hier melden ihre Fehler so ans Modell, daher bleibt der Text wie in mcp 1.x erhalten."""
+
+    async def call_tool(self, name, arguments, context=None):  # type: ignore[no-untyped-def]
+        try:
+            return await super().call_tool(name, arguments, context)
+        except UnexpectedToolError as exc:
+            logging.getLogger("mcp.server.mcpserver").exception("Tool %r raised an unexpected exception", name)
+            raise ToolError(f"{exc}: {exc.__cause__}") from exc.__cause__
+
+
+mcp = KlartextServer("drucker")
 
 
 def _print(
@@ -395,9 +408,11 @@ def _run_sse() -> None:
                       response.status_code, int((time.monotonic() - t0) * 1000))
             return response
 
-    sse = SseServerTransport("/messages/")
-    _server = mcp._mcp_server
-    session_manager = StreamableHTTPSessionManager(app=_server, json_response=True)
+    # mcp 2.x begrenzt Request-Bodies per Default auf 4 MiB; base64-Uploads brauchen mehr.
+    max_body = 32 * 1024 * 1024
+    sse = SseServerTransport("/messages/", max_request_body_size=max_body)
+    _server = mcp._lowlevel_server
+    session_manager = StreamableHTTPSessionManager(app=_server, json_response=True, max_request_body_size=max_body)
 
     class _AlreadySent(Response):
         def __init__(self) -> None:
